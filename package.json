@@ -1,0 +1,23 @@
+{
+  "name": "webgpu-starter",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build:purescript": "spago build",
+    "build": "pnpm build:purescript && vite build",
+    "test": "spago test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "purescript": "0.15.14",
+    "spago": "0.93.28",
+    "tailwindcss": "^3.4.3",
+    "vite": "^5.2.6"
+  }
+}

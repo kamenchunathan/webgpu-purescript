@@ -1,0 +1,21 @@
+package:
+  name: webgpu-starter
+  dependencies:
+    - aff
+    - canvas
+    - console
+    - effect
+    - js-promise-aff
+    - prelude
+    - web-html
+    - webgpu
+  test:
+    main: Test.Main
+    dependencies: []
+workspace:
+  package_set:
+    registry: 50.1.2
+  extra_packages: {}
+  # backend:
+  #   cmd: purs-backend-es
+  #   args: [ "build" ]
