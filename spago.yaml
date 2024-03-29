@@ -2,9 +2,12 @@ package:
   name: webgpu-starter
   dependencies:
     - aff
+    - arraybuffer
+    - arraybuffer-types
     - canvas
     - console
     - effect
+    - float32
     - js-promise-aff
     - prelude
     - web-html

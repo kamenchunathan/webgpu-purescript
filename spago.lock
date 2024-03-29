@@ -4,9 +4,12 @@ workspace:
       path: ./
       dependencies:
         - aff
+        - arraybuffer
+        - arraybuffer-types
         - canvas
         - console
         - effect
+        - float32
         - js-promise-aff
         - prelude
         - web-html
@@ -14,6 +17,7 @@ workspace:
       test_dependencies: []
       build_plan:
         - aff
+        - arraybuffer
         - arraybuffer-types
         - arrays
         - bifunctors
@@ -29,6 +33,7 @@ workspace:
         - enums
         - exceptions
         - exists
+        - float32
         - foldable-traversable
         - foreign
         - foreign-object
@@ -578,6 +583,23 @@ packages:
       - tailrec
       - transformers
       - unsafe-coerce
+  arraybuffer:
+    type: registry
+    version: 13.2.0
+    integrity: sha256-fNsR19aRqcUis9C28MpyMigIlfX6f6Hq1up4IcTOvDU=
+    dependencies:
+      - arraybuffer-types
+      - arrays
+      - effect
+      - float32
+      - functions
+      - gen
+      - maybe
+      - nullable
+      - prelude
+      - tailrec
+      - uint
+      - unfoldable
   arraybuffer-types:
     type: registry
     version: 3.0.2
@@ -730,6 +752,14 @@ packages:
     integrity: sha256-A0JQHpTfo1dNOj9U5/Fd3xndlRSE0g2IQWOGor2yXn8=
     dependencies:
       - unsafe-coerce
+  float32:
+    type: registry
+    version: 2.0.0
+    integrity: sha256-PRRdv0zNZ8JdohWTO3ZSLzt51ymxK4/NHtGTwuMWHtw=
+    dependencies:
+      - gen
+      - maybe
+      - prelude
   foldable-traversable:
     type: registry
     version: 6.0.0
