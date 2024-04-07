@@ -3,9 +3,12 @@ module Main (main) where
 import Prelude
 
 import Control.Monad.Error.Class (class MonadThrow, liftMaybe)
+import Data.Array (length)
 import Data.ArrayBuffer.Typed (fromArray)
-import Data.ArrayBuffer.Types (Float32Array)
-import Data.Float32 (fromNumber')
+import Data.ArrayBuffer.Types as ArrayBuffer.Types
+import Data.ArrayBuffer.ValueMapping (byteWidth)
+import Data.Float32 (Float32, fromNumber')
+import Web.GPU.Internal.Bitwise ((.|.))
 import Data.Maybe (Maybe)
 import Effect (Effect)
 import Effect.Aff (Error, error, launchAff_)
@@ -13,6 +16,7 @@ import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Promise.Aff as Promise.Aff
 import Shader (shaderSource)
+import Type.Prelude (Proxy(..))
 import Web.DOM.NonElementParentNode (getElementById)
 import Web.GPU.BufferSource (fromFloat32Array)
 import Web.GPU.GPU (GPU, getPreferredCanvasFormat, requestAdapter)
@@ -26,15 +30,7 @@ import Web.GPU.GPUColor (gpuColorRGBA)
 import Web.GPU.GPUColorWrite as GPUColorWrite
 import Web.GPU.GPUCommandEncoder (beginRenderPass, finish)
 import Web.GPU.GPUCullMode as GPUCullMode
-import Web.GPU.GPUDevice
-  ( GPUDevice
-  , createBuffer
-  , createCommandEncoder
-  , createPipelineLayout
-  , createRenderPipeline
-  , createShaderModule
-  , queue
-  )
+import Web.GPU.GPUDevice (GPUDevice, createBuffer, createCommandEncoder, createPipelineLayout, createRenderPipeline, createShaderModule, queue)
 import Web.GPU.GPUFrontFace as GPUFrontFace
 import Web.GPU.GPULoadOp as GPULoadOp
 import Web.GPU.GPUPowerPreference as GPUPowerPreference
@@ -80,7 +76,7 @@ next gpu device = do
     device
     ( RequiredAndOptional.requiredAndOptional
         { code: shaderSource }
-        { label: "default shader" }
+        { label: "Default Shader" }
     )
 
   renderPipelineLayout <- liftEffect $ createPipelineLayout
@@ -119,11 +115,6 @@ next gpu device = do
                     ]
                 }
             )
-        , multisample: RequiredAndOptional.o
-            { count: 1
-            , mask: -1
-            , alphaToCoverageEnabled: false
-            }
         , primitive: RequiredAndOptional.o
             { topology: GPUPrimitiveTopology.triangleList
             , frontFace: GPUFrontFace.ccw
@@ -135,7 +126,9 @@ next gpu device = do
   buf <- liftEffect $ createBuffer
     device
     ( RequiredAndOptional.requiredAndOptional
-        { size: 8, usage: GPUBufferUsage.vertex }
+        { size: length vertices * byteWidth (Proxy :: _ ArrayBuffer.Types.Float32)
+        , usage: GPUBufferUsage.vertex .|. GPUBufferUsage.copyDst
+        }
         { label: "Triangles" }
     )
   pure { renderPipeline, buf }
@@ -143,13 +136,13 @@ next gpu device = do
 render :: GPUCanvasContext -> GPUDevice -> GPURenderPipeline -> GPUBuffer -> Effect Unit
 render ctx device renderPipeline buf = do
   queue <- queue device
-  v <- vertices
+  v <- fromArray vertices
   writeBuffer queue buf 0 (fromFloat32Array v)
   texture <- getCurrentTexture ctx
   view <- createView texture
   commandEncoder <- createCommandEncoder
     device
-    (RequiredAndOptional.o { label: "Render Encoder" })
+    (RequiredAndOptional.o { label: "command-encoder" })
   renderPass <- beginRenderPass
     commandEncoder
     ( RequiredAndOptional.requiredAndOptional
@@ -162,17 +155,17 @@ render ctx device renderPipeline buf = do
                 { clearValue: gpuColorRGBA 1.0 0.79 0.75 1.0 }
             ]
         }
-        { label: "Render Encoder" }
+        { label: "renderpass-encoder" }
     )
   setPipeline renderPass renderPipeline
-  setVertexBuffer renderPass 0 buf
-  draw renderPass 3
+  -- setVertexBuffer renderPass 0 buf
+  -- draw renderPass 3
   end renderPass
   commandBuf <- finish commandEncoder
-  submit queue [ commandBuf ]
+  submit queue [ {- commandBuf -} ]
 
-vertices :: Effect Float32Array
-vertices = fromArray $ fromNumber' <$>
+vertices :: Array Float32
+vertices = fromNumber' <$>
   [ -0.25
   , 0.5
   , 0.0
@@ -265,5 +258,5 @@ configureCanvas gpu device canvas = do
       ctx
       ( RequiredAndOptional.requiredAndOptional
           { device, format }
-          { usage: GPUTextureUsage.textureBinding }
+          { usage: GPUTextureUsage.renderAttachment }
       )
