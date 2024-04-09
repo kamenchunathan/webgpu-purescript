@@ -1,4 +1,4 @@
-module Main (main) where
+module Main where
 
 import Prelude
 
@@ -8,7 +8,6 @@ import Data.ArrayBuffer.Typed (fromArray)
 import Data.ArrayBuffer.Types as ArrayBuffer.Types
 import Data.ArrayBuffer.ValueMapping (byteWidth)
 import Data.Float32 (Float32, fromNumber')
-import Web.GPU.Internal.Bitwise ((.|.))
 import Data.Maybe (Maybe)
 import Effect (Effect)
 import Effect.Aff (Error, error, launchAff_)
@@ -41,7 +40,10 @@ import Web.GPU.GPURenderPipeline (GPURenderPipeline)
 import Web.GPU.GPUStoreOp as GPUStoreOp
 import Web.GPU.GPUTexture (createView)
 import Web.GPU.GPUTextureUsage as GPUTextureUsage
+import Web.GPU.GPUVertexFormat (GPUVertexFormat)
+import Web.GPU.GPUVertexFormat as GPUVertexFormat
 import Web.GPU.HTMLCanvasElement (getContext)
+import Web.GPU.Internal.Bitwise ((.|.))
 import Web.GPU.Internal.RequiredAndOptional as RequiredAndOptional
 import Web.GPU.Navigator as Navigator
 import Web.HTML (HTMLCanvasElement, window)
@@ -81,15 +83,41 @@ next gpu device = do
 
   renderPipelineLayout <- liftEffect $ createPipelineLayout
     device
-    (RequiredAndOptional.r { bindGroupLayouts: [] })
+    ( RequiredAndOptional.requiredAndOptional
+        { bindGroupLayouts: [] }
+        { label: "simple-pipeline-layout" }
+    )
 
   renderPipeline <- liftEffect $ createRenderPipeline
     device
     ( RequiredAndOptional.requiredAndOptional
         { layout: renderPipelineLayout
-        , vertex: (RequiredAndOptional.r { module: shader, entryPoint: "vs_main" })
+        , vertex:
+            ( RequiredAndOptional.requiredAndOptional
+                { module: shader, entryPoint: "vs_main" }
+                { buffers:
+                    [ ( RequiredAndOptional.r
+                          { arrayStride: 6 * byteWidth (Proxy :: _ ArrayBuffer.Types.Float32)
+                          , attributes:
+                              [ RequiredAndOptional.r
+                                  { format: GPUVertexFormat.float32x3
+                                  , offset: 0
+                                  , shaderLocation: 0
+                                  }
+                              , RequiredAndOptional.r
+                                  { format: GPUVertexFormat.float32x3
+                                  , offset: 3 * byteWidth (Proxy :: _ ArrayBuffer.Types.Float32)
+                                  , shaderLocation: 1
+                                  }
+
+                              ]
+                          }
+                      )
+                    ]
+                }
+            )
         }
-        { label: "Hardcoded Render Pipeline"
+        { label: "simple-render-pipeline"
         , fragment:
             ( RequiredAndOptional.r
                 { entryPoint: "fs_main"
@@ -150,7 +178,7 @@ render ctx device renderPipeline buf = do
             [ RequiredAndOptional.requiredAndOptional
                 { view
                 , loadOp: GPULoadOp.clear
-                , storeOp: GPUStoreOp.discard
+                , storeOp: GPUStoreOp.store
                 }
                 { clearValue: gpuColorRGBA 1.0 0.79 0.75 1.0 }
             ]
@@ -158,11 +186,11 @@ render ctx device renderPipeline buf = do
         { label: "renderpass-encoder" }
     )
   setPipeline renderPass renderPipeline
-  -- setVertexBuffer renderPass 0 buf
-  -- draw renderPass 3
+  setVertexBuffer renderPass 0 buf
+  draw renderPass 3
   end renderPass
   commandBuf <- finish commandEncoder
-  submit queue [ {- commandBuf -} ]
+  submit queue [ commandBuf ]
 
 vertices :: Array Float32
 vertices = fromNumber' <$>
