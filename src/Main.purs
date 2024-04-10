@@ -2,22 +2,25 @@ module Main where
 
 import Prelude
 
+import Assets (defaultTriangleMesh)
 import Control.Monad.Error.Class (class MonadThrow, liftMaybe)
-import Data.Array (length)
-import Data.ArrayBuffer.Typed (fromArray)
+import Data.ArrayBuffer.ArrayBuffer as ArrayBuffer
+import Data.ArrayBuffer.Typed (whole)
+import Data.ArrayBuffer.Typed as TypedArrayBuffer
+import Data.ArrayBuffer.Types (ArrayBuffer, Float32Array, Uint16Array)
 import Data.ArrayBuffer.Types as ArrayBuffer.Types
 import Data.ArrayBuffer.ValueMapping (byteWidth)
-import Data.Float32 (Float32, fromNumber')
 import Data.Maybe (Maybe)
 import Effect (Effect)
 import Effect.Aff (Error, error, launchAff_)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Promise.Aff as Promise.Aff
-import Shader (shaderSource)
+import Renderer (shaderSource)
 import Type.Prelude (Proxy(..))
+import Util ((|>))
 import Web.DOM.NonElementParentNode (getElementById)
-import Web.GPU.BufferSource (fromFloat32Array)
+import Web.GPU.BufferSource (fromArrayBuffer)
 import Web.GPU.GPU (GPU, getPreferredCanvasFormat, requestAdapter)
 import Web.GPU.GPUAdapter (GPUAdapter, requestDevice)
 import Web.GPU.GPUBlendFactor as GPUBlendFactor
@@ -29,18 +32,32 @@ import Web.GPU.GPUColor (gpuColorRGBA)
 import Web.GPU.GPUColorWrite as GPUColorWrite
 import Web.GPU.GPUCommandEncoder (beginRenderPass, finish)
 import Web.GPU.GPUCullMode as GPUCullMode
-import Web.GPU.GPUDevice (GPUDevice, createBuffer, createCommandEncoder, createPipelineLayout, createRenderPipeline, createShaderModule, queue)
+import Web.GPU.GPUDevice
+  ( GPUDevice
+  , createBuffer
+  , createCommandEncoder
+  , createPipelineLayout
+  , createRenderPipeline
+  , createShaderModule
+  , queue
+  )
 import Web.GPU.GPUFrontFace as GPUFrontFace
+import Web.GPU.GPUIndexFormat as GPUIndexFormat
 import Web.GPU.GPULoadOp as GPULoadOp
 import Web.GPU.GPUPowerPreference as GPUPowerPreference
 import Web.GPU.GPUPrimitiveTopology as GPUPrimitiveTopology
 import Web.GPU.GPUQueue (submit, writeBuffer)
-import Web.GPU.GPURenderPassEncoder (draw, end, setPipeline, setVertexBuffer)
+import Web.GPU.GPURenderPassEncoder
+  ( drawIndexed
+  , end
+  , setIndexBuffer
+  , setPipeline
+  , setVertexBuffer
+  )
 import Web.GPU.GPURenderPipeline (GPURenderPipeline)
 import Web.GPU.GPUStoreOp as GPUStoreOp
 import Web.GPU.GPUTexture (createView)
 import Web.GPU.GPUTextureUsage as GPUTextureUsage
-import Web.GPU.GPUVertexFormat (GPUVertexFormat)
 import Web.GPU.GPUVertexFormat as GPUVertexFormat
 import Web.GPU.HTMLCanvasElement (getContext)
 import Web.GPU.Internal.Bitwise ((.|.))
@@ -53,26 +70,63 @@ import Web.HTML.Window (document, navigator)
 
 main ∷ Effect Unit
 main = launchAff_ do
+  renderApp
+
+renderApp :: forall m. MonadAff m => MonadThrow Error m => m Unit
+renderApp = do
+  -- Set up for rendering
   { gpu, device } <- setup
-  mCanvas <- liftEffect $ getCanvas
-  canvas <- liftMaybe (error "Unable to Get Canvas element") mCanvas
+  canvas <- liftEffect $ getCanvas
+    >>= liftMaybe (error "Unable to Get Canvas element")
+
   configureCanvas gpu device canvas
-  { renderPipeline, buf } <- liftEffect $ next gpu device
-  -- TODO: temporary. remove this
-  mCtx <- liftEffect $ getContext canvas
-  ctx <- liftMaybe (error "Unable to Get Canvas Context") mCtx
-  liftEffect $ render ctx device renderPipeline buf
+  ctx <- liftEffect $ getContext canvas
+    >>= liftMaybe (error "Unable to Get Canvas Context")
+
+  -- load assets to render
+  squareMesh <- liftAff $ defaultTriangleMesh -- loadMesh "square.gltf"
+  let
+    vertexBuffer = ArrayBuffer.slice
+      squareMesh.positionBufView.byteOffset
+      (squareMesh.positionBufView.byteOffset + squareMesh.positionBufView.byteLength)
+      squareMesh.buffer.bytes
+    indexBuffer = ArrayBuffer.slice
+      squareMesh.indexBufView.byteOffset
+      (squareMesh.indexBufView.byteOffset + squareMesh.indexBufView.byteLength)
+      squareMesh.buffer.bytes
+
+  vertexArrayView :: Float32Array <- liftEffect $ whole vertexBuffer
+  indexArrayView :: Uint16Array <- liftEffect $ whole indexBuffer
+
+  -- Render
+  { renderPipeline, vertexBuf, indexBuf } <-
+    next
+      gpu
+      device
+      { vertexBufferLen: TypedArrayBuffer.byteLength vertexArrayView
+      , indexBufferLen: TypedArrayBuffer.byteLength indexArrayView
+      }
+      |> liftEffect
+  pure unit
+  render ctx device renderPipeline
+    { vertexBuffer: vertexBuf
+    , vertices: vertexBuffer
+    , indexBuffer: indexBuf
+    , indices: indexBuffer
+    } |> liftEffect
 
 next
   :: forall m
    . MonadEffect m
   => GPU
   -> GPUDevice
+  -> { vertexBufferLen :: Int, indexBufferLen :: Int }
   -> m
        { renderPipeline :: GPURenderPipeline
-       , buf :: GPUBuffer
+       , vertexBuf :: GPUBuffer
+       , indexBuf :: GPUBuffer
        }
-next gpu device = do
+next gpu device { vertexBufferLen, indexBufferLen } = do
   preferredTextureFormat <- liftEffect $ getPreferredCanvasFormat gpu
   shader <- liftEffect $ createShaderModule
     device
@@ -97,19 +151,13 @@ next gpu device = do
                 { module: shader, entryPoint: "vs_main" }
                 { buffers:
                     [ ( RequiredAndOptional.r
-                          { arrayStride: 6 * byteWidth (Proxy :: _ ArrayBuffer.Types.Float32)
+                          { arrayStride: 3 * byteWidth (Proxy :: _ ArrayBuffer.Types.Float32)
                           , attributes:
                               [ RequiredAndOptional.r
                                   { format: GPUVertexFormat.float32x3
                                   , offset: 0
                                   , shaderLocation: 0
                                   }
-                              , RequiredAndOptional.r
-                                  { format: GPUVertexFormat.float32x3
-                                  , offset: 3 * byteWidth (Proxy :: _ ArrayBuffer.Types.Float32)
-                                  , shaderLocation: 1
-                                  }
-
                               ]
                           }
                       )
@@ -151,21 +199,38 @@ next gpu device = do
             }
         }
     )
-  buf <- liftEffect $ createBuffer
+  vertexBuf <- liftEffect $ createBuffer
     device
     ( RequiredAndOptional.requiredAndOptional
-        { size: length vertices * byteWidth (Proxy :: _ ArrayBuffer.Types.Float32)
-        , usage: GPUBufferUsage.vertex .|. GPUBufferUsage.copyDst
+        { size: vertexBufferLen
+        , usage: GPUBufferUsage.index .|. GPUBufferUsage.copyDst .|. GPUBufferUsage.vertex
         }
-        { label: "Triangles" }
+        { label: "vertex buffer" }
     )
-  pure { renderPipeline, buf }
+  indexBuf <- liftEffect $ createBuffer
+    device
+    ( RequiredAndOptional.requiredAndOptional
+        { size: indexBufferLen
+        , usage: GPUBufferUsage.index .|. GPUBufferUsage.copyDst
+        }
+        { label: "index buffer" }
+    )
+  pure { renderPipeline, vertexBuf, indexBuf }
 
-render :: GPUCanvasContext -> GPUDevice -> GPURenderPipeline -> GPUBuffer -> Effect Unit
-render ctx device renderPipeline buf = do
+render
+  :: GPUCanvasContext
+  -> GPUDevice
+  -> GPURenderPipeline
+  -> { indexBuffer :: GPUBuffer
+     , indices :: ArrayBuffer
+     , vertexBuffer :: GPUBuffer
+     , vertices :: ArrayBuffer
+     }
+  -> Effect Unit
+render ctx device renderPipeline { vertexBuffer, vertices, indexBuffer, indices } = do
   queue <- queue device
-  v <- fromArray vertices
-  writeBuffer queue buf 0 (fromFloat32Array v)
+  writeBuffer queue vertexBuffer 0 (fromArrayBuffer vertices)
+  writeBuffer queue indexBuffer 0 (fromArrayBuffer indices)
   texture <- getCurrentTexture ctx
   view <- createView texture
   commandEncoder <- createCommandEncoder
@@ -186,51 +251,12 @@ render ctx device renderPipeline buf = do
         { label: "renderpass-encoder" }
     )
   setPipeline renderPass renderPipeline
-  setVertexBuffer renderPass 0 buf
-  draw renderPass 3
+  setVertexBuffer renderPass 0 vertexBuffer
+  setIndexBuffer renderPass indexBuffer GPUIndexFormat.uint16
+  drawIndexed renderPass 6
   end renderPass
   commandBuf <- finish commandEncoder
   submit queue [ commandBuf ]
-
-vertices :: Array Float32
-vertices = fromNumber' <$>
-  [ -0.25
-  , 0.5
-  , 0.0
-  , 1.0
-  , 0.0
-  , 0.0
-  , -0.5
-  , -0.5
-  , 0.0
-  , 0.0
-  , 1.0
-  , 0.0
-  , 0.0
-  , -0.5
-  , 0.0
-  , 0.0
-  , 0.0
-  , 1.0
-  , 0.25
-  , 0.5
-  , 0.0
-  , 0.0
-  , 1.0
-  , 1.0
-  , 0.0
-  , -0.5
-  , 0.0
-  , 1.0
-  , 0.0
-  , 1.0
-  , 0.5
-  , -0.5
-  , 0.0
-  , 1.0
-  , 1.0
-  , 0.0
-  ]
 
 setup
   :: forall m

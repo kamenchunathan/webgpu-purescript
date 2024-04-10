@@ -1,3 +1,3 @@
-module Shader (shaderSource) where
+module Renderer (shaderSource) where
 
 foreign import shaderSource :: String

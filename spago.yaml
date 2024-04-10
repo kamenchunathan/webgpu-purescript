@@ -2,6 +2,8 @@ package:
   name: webgpu-starter
   dependencies:
     - aff
+    - affjax-web
+    - argonaut
     - arraybuffer
     - arraybuffer-types
     - canvas
