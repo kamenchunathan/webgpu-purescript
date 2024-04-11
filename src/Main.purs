@@ -2,7 +2,7 @@ module Main where
 
 import Prelude
 
-import Assets (defaultTriangleMesh)
+import Assets (defaultTriangleMesh, loadMesh)
 import Control.Monad.Error.Class (class MonadThrow, liftMaybe)
 import Data.ArrayBuffer.ArrayBuffer as ArrayBuffer
 import Data.ArrayBuffer.Typed (whole)
@@ -15,9 +15,11 @@ import Effect (Effect)
 import Effect.Aff (Error, error, launchAff_)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
+import Effect.Console as Console
 import Promise.Aff as Promise.Aff
 import Renderer (shaderSource)
 import Type.Prelude (Proxy(..))
+import Unsafe.Coerce (unsafeCoerce)
 import Util ((|>))
 import Web.DOM.NonElementParentNode (getElementById)
 import Web.GPU.BufferSource (fromArrayBuffer)
@@ -32,28 +34,14 @@ import Web.GPU.GPUColor (gpuColorRGBA)
 import Web.GPU.GPUColorWrite as GPUColorWrite
 import Web.GPU.GPUCommandEncoder (beginRenderPass, finish)
 import Web.GPU.GPUCullMode as GPUCullMode
-import Web.GPU.GPUDevice
-  ( GPUDevice
-  , createBuffer
-  , createCommandEncoder
-  , createPipelineLayout
-  , createRenderPipeline
-  , createShaderModule
-  , queue
-  )
+import Web.GPU.GPUDevice (GPUDevice, createBuffer, createCommandEncoder, createPipelineLayout, createRenderPipeline, createShaderModule, queue)
 import Web.GPU.GPUFrontFace as GPUFrontFace
 import Web.GPU.GPUIndexFormat as GPUIndexFormat
 import Web.GPU.GPULoadOp as GPULoadOp
 import Web.GPU.GPUPowerPreference as GPUPowerPreference
 import Web.GPU.GPUPrimitiveTopology as GPUPrimitiveTopology
 import Web.GPU.GPUQueue (submit, writeBuffer)
-import Web.GPU.GPURenderPassEncoder
-  ( drawIndexed
-  , end
-  , setIndexBuffer
-  , setPipeline
-  , setVertexBuffer
-  )
+import Web.GPU.GPURenderPassEncoder (drawIndexed, end, setIndexBuffer, setPipeline, setVertexBuffer)
 import Web.GPU.GPURenderPipeline (GPURenderPipeline)
 import Web.GPU.GPUStoreOp as GPUStoreOp
 import Web.GPU.GPUTexture (createView)
@@ -84,7 +72,7 @@ renderApp = do
     >>= liftMaybe (error "Unable to Get Canvas Context")
 
   -- load assets to render
-  squareMesh <- liftAff $ defaultTriangleMesh -- loadMesh "square.gltf"
+  squareMesh <- liftAff $  loadMesh "square.gltf"
   let
     vertexBuffer = ArrayBuffer.slice
       squareMesh.positionBufView.byteOffset
@@ -231,6 +219,9 @@ render ctx device renderPipeline { vertexBuffer, vertices, indexBuffer, indices 
   queue <- queue device
   writeBuffer queue vertexBuffer 0 (fromArrayBuffer vertices)
   writeBuffer queue indexBuffer 0 (fromArrayBuffer indices)
+  do
+    i :: Float32Array <- TypedArrayBuffer.whole vertices
+    Console.log $ unsafeCoerce  i
   texture <- getCurrentTexture ctx
   view <- createView texture
   commandEncoder <- createCommandEncoder
