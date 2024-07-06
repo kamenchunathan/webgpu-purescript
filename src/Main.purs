@@ -263,21 +263,24 @@ setup = do
   mGPU <- liftEffect $ window >>= navigator >>= Navigator.gpu
   gpu <- liftMaybe (error "WebGPU not supported on this platform") mGPU
 
-  mGPUAdapter <- liftAff $
-    ( liftEffect $ Promise.Aff.toAff <$> requestAdapter gpu
+  mGPUAdapter <- liftAff
+    $ join
+    $ liftEffect
+    $ Promise.Aff.toAff <$> requestAdapter gpu
         ( RequiredAndOptional.o
             { powerPreference: GPUPowerPreference.highPerformance }
         )
-    ) >>= identity
   adapter <- liftMaybe (error "WebGPU not supported on this platform") mGPUAdapter
 
-  mDevice <- liftAff $
-    ( liftEffect $ Promise.Aff.toAff <$> requestDevice adapter
+  mDevice <- liftAff
+    $ join
+    $ liftEffect
+    $ Promise.Aff.toAff <$> requestDevice adapter
         ( RequiredAndOptional.o
             { label: "Default device" }
         )
-    ) >>= identity
   device <- liftMaybe (error "WebGPU not supported on this platform") mDevice
+  
   pure { gpu, adapter, device }
 
 getCanvas :: Effect (Maybe HTMLCanvasElement)
