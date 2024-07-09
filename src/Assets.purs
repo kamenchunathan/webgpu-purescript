@@ -1,4 +1,9 @@
-module Assets (loadMesh, defaultTriangleMesh, Mesh) where
+module Assets
+  ( Mesh
+  , defaultTriangleMesh
+  , extractMeshData
+  , loadMesh
+  ) where
 
 import Prelude
 
@@ -16,13 +21,7 @@ import Data.ArrayBuffer.ArrayBuffer as ArrayBuffer
 import Data.ArrayBuffer.Cast as ArrayBuffer.Cast
 import Data.ArrayBuffer.DataView as ArrayBuffer.Dataview
 import Data.ArrayBuffer.Typed as ArrayBuffer.Typed
-import Data.ArrayBuffer.Types
-  ( ArrayBuffer
-  , ArrayView
-  , Float32Array
-  , Uint16Array
-  , Uint8
-  )
+import Data.ArrayBuffer.Types (ArrayBuffer, Float32Array, Uint16Array, Uint8Array)
 import Data.Either (Either(..), either, note)
 import Data.Float32 as Float32
 import Data.Function (applyFlipped)
@@ -149,36 +148,13 @@ decodeMeshGltf mesh = do
 
 defaultTriangleMesh :: Aff Mesh
 defaultTriangleMesh = do
-  -- do 
-  --   squareMesh  <- loadMesh "square.gltf" 
-  --   squareMeshArrayView :: (ArrayView Float32) <- ArrayBuffer.Typed.whole squareMesh.buffer.bytes |> liftEffect 
-  --   squareVertexPositions <- ArrayBuffer.Typed.toArray squareMeshArrayView |> liftEffect 
-  --   liftEffect $ Console.log $ unsafeCoerce squareVertexPositions
   let
     vertexPositions = Float32.fromNumber' <$>
-      [ -0.25
-      , 0.5
-      , 0.0
-      , -0.5
-      , -0.5
-      , 0.0
-      , 0.0
-      , -0.5
-      , 0.0
-      , 0.25
-      , 0.5
-      , 0.0
-      , 0.5
-      , -0.5
-      , 0.0
-      ]
-
+      [ -0.25, 0.5, 0.0, -0.5, -0.5, 0.0, 0.0, -0.5, 0.0, 0.25, 0.5, 0.0, 0.5, -0.5, 0.0 ]
     indices = UInt.fromInt <$> [ 0, 1, 2, 3, 2, 4 ]
 
-  vPosView :: Float32Array <- ArrayBuffer.Typed.fromArray vertexPositions
-    |> liftEffect
-  indexView :: Uint16Array <- ArrayBuffer.Typed.fromArray indices
-    |> liftEffect
+  vPosView :: Float32Array <- ArrayBuffer.Typed.fromArray vertexPositions |> liftEffect
+  indexView :: Uint16Array <- ArrayBuffer.Typed.fromArray indices |> liftEffect
 
   let vPosByteLen = ArrayBuffer.Typed.byteLength vPosView
   let indexByteLen = ArrayBuffer.Typed.byteLength indexView
@@ -186,7 +162,7 @@ defaultTriangleMesh = do
   -- Create an empty buffer to which we will append the values in the other array buffers
   bytes <- ArrayBuffer.empty (vPosByteLen + indexByteLen) |> liftEffect
   -- get an arrayview as uint8 so we can write to it using a typed api
-  bufView :: ArrayView Uint8 <- ArrayBuffer.Typed.whole bytes |> liftEffect
+  bufView :: Uint8Array <- ArrayBuffer.Typed.whole bytes |> liftEffect
 
   -- Cast each array to uint8 and use set to copy their values to the main array
   vPosUint8 <- vPosView
@@ -221,3 +197,15 @@ defaultTriangleMesh = do
         }
 
     }
+
+extractMeshData :: Mesh -> { indices :: ArrayBuffer, vertices :: ArrayBuffer }
+extractMeshData mesh =
+  { vertices: ArrayBuffer.slice
+      mesh.positionBufView.byteOffset
+      (mesh.positionBufView.byteOffset + mesh.positionBufView.byteLength)
+      mesh.buffer.bytes
+  , indices: ArrayBuffer.slice
+      mesh.indexBufView.byteOffset
+      (mesh.indexBufView.byteOffset + mesh.indexBufView.byteLength)
+      mesh.buffer.bytes
+  }

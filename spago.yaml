@@ -6,12 +6,15 @@ package:
     - argonaut
     - arraybuffer
     - arraybuffer-types
+    - arrays
     - canvas
     - console
     - effect
+    - fast-vect
     - float32
     - js-promise-aff
     - prelude
+    - st
     - web-html
     - webgpu
   test:
@@ -20,7 +23,11 @@ package:
 workspace:
   package_set:
     registry: 50.1.2
-  extra_packages: {}
+  extra_packages:
+    {}
+    # quaternions:
+    #   git: https://github.com/hdgarrood/purescript-quaternions  
+    #   ref: f3614f2afacb8a56f3cb470e5bd4d88960ba32bd
   # backend:
   #   cmd: purs-backend-es
   #   args: [ "build" ]
