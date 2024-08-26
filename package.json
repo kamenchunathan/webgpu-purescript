@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "postinstall": "pnpm spago install",
     "dev": "vite",
     "build:purescript": "spago build",
     "build": "pnpm build:purescript && vite build",

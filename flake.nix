@@ -3,7 +3,7 @@
   description = "A Lambda Calculus parser";
   
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.05";
+    nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1.*.tar.gz";
     purescript-overlay = {
       url = "github:thomashoneyman/purescript-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -38,6 +38,8 @@
           default = pkgs.mkShell {
             name = "lambda-calculus-parser";
             buildInputs = with pkgs; [
+              nodejs_20
+              nodePackages.pnpm
               purs-bin.purs-0_15_14
               spago-unstable
               purescript-language-server
